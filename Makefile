@@ -1,29 +1,34 @@
 .DEFAULT_GOAL= build
 
-OBJDIR:= output
+OBJDIR:= out
+SRCDIR:= src
 PROG:= monga-cc
-LEXINPUT:= mongalang.lex
-SRCS:= main.c
+LEXINPUT:= monga.lex
+SRCS:= main.c lex.yy.c
 
 OBJS:= ${SRCS:%.c=${OBJDIR}/%.o}
 
-CFLAGS=
-LDFLAGS=
+CFLAGS= -g
+LDFLAGS= -lfl
 
 ${OBJDIR}:
-	mkdir $@
+	@mkdir $@
 
-${OBJDIR}/%.o: %.c | ${OBJDIR}
+${OBJDIR}/%.o: ${SRCDIR}/%.c | ${OBJDIR}
 	$(eval REALPATH:= $(realpath $<))
 	${CC} -o $@ ${CFLAGS} -c ${REALPATH}
 
-${PROG}: ${OBJS}
+${OBJDIR}/${PROG}:
 	${CC} -o $@ ${OBJS} ${LDFLAGS}
 
-${GENLEX}:
-	lex --header-file=lex.yy.h ${LEXINPUT}
+lex:
+	@(if [ -d ${OBJDIR} ]; then rm -rf ${OBJDIR}; fi && \
+		cd src && lex --header-file=lex.yy.h ${LEXINPUT})
 
-build: ${GENLEX} ${PROG}
+build: lex ${OBJS} ${OBJDIR}/${PROG}
+
+testes: build
+	bash testes/testa.sh ${OBJDIR}/${PROG}
 
 clean:
 	rm -rf ${OBJDIR}
