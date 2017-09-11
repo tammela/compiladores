@@ -3,8 +3,8 @@
 OBJDIR:= out
 SRCDIR:= src
 PROG:= monga-cc
-LEXINPUT:= monga.lex
-SRCS:= main.c lex.yy.c
+LEXINPUT:= monga.l
+SRCS:= monga.tab.c main.c lex.yy.c
 
 OBJS:= ${SRCS:%.c=${OBJDIR}/%.o}
 
@@ -21,11 +21,15 @@ ${OBJDIR}/%.o: ${SRCDIR}/%.c | ${OBJDIR}
 ${OBJDIR}/${PROG}:
 	${CC} -o $@ ${OBJS} ${LDFLAGS}
 
+bison:
+	@(if [ -d ${OBJDIR} ]; then rm -rf ${OBJDIR}; fi && \
+	   cd src && bison -d monga.y)
+
 lex:
 	@(if [ -d ${OBJDIR} ]; then rm -rf ${OBJDIR}; fi && \
 		cd src && lex --header-file=lex.yy.h ${LEXINPUT})
 
-build: lex ${OBJS} ${OBJDIR}/${PROG}
+build: bison lex ${OBJS} ${OBJDIR}/${PROG}
 
 testes: build
 	bash testes/testa.sh ${OBJDIR}/${PROG}

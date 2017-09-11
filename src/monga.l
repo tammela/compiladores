@@ -1,16 +1,14 @@
-/* lex para monga */
-
 %{
 #include <string.h>
-#include "tk.h"
+#include "monga.tab.h"
 
-char *copyid();
-char *copys();
-char *copyl();
-int copyint();
-int copyhint();
-float copyflt();
-float copyhflt();
+static char *copyid();
+static char *copys();
+static char *copyl();
+static int copyint();
+static int copyhint();
+static float copyflt();
+static float copyhflt();
 %}
 
 comment         \#[^\n]*\n
@@ -48,39 +46,37 @@ new                             { return TK_NEW; }
 
 as                              { return TK_AS; }
 
-@                               { return TK_PRINT; }
-
 {id}                            {
-                                    sem.str = copyid();
+                                    yylval.str = copyid();
                                     return TK_ID;
                                 }
 
 {string}                        {
-                                    sem.str = copys();
+                                    yylval.str = copys();
                                     return TK_STRING;
                                 }
 
 {literal}                       {
-                                    sem.str = copyl();
+                                    yylval.str = copyl();
                                     return TK_LITERAL;
                                 }
 {decflt}                        {
-                                    sem.fnum = copyflt();
+                                    yylval.fnum = copyflt();
                                     return TK_SFLOAT;
                                 }
 
 {hexflt}                        {
-                                    sem.fnum = copyhflt();
+                                    yylval.fnum = copyhflt();
                                     return TK_SFLOAT;
                                 }
 
 {decint}                        {
-                                    sem.inum = copyint();
+                                    yylval.inum = copyint();
                                     return TK_SINT;
                                 }
 
 {hexint}                        {
-                                    sem.inum = copyhint();
+                                    yylval.inum = copyhint();
                                     return TK_SINT;
                                 }
 
@@ -116,7 +112,7 @@ static void *copyalloc(size_t arraysz)
    return ptr;
 }
 
-char *copyid()
+static char *copyid()
 {
    char *str = copyalloc(yyleng + 1);
 
@@ -125,7 +121,7 @@ char *copyid()
    return str;
 }
 
-char escape(char c)
+static char escape(char c)
 {
    switch(c) {
       case 'n':
@@ -146,7 +142,7 @@ char escape(char c)
    }
 }
 
-char *copys()
+static char *copys()
 {
    int i = 0;
    char *str = copyalloc(yyleng - 1);
@@ -175,34 +171,35 @@ char *copys()
    return str;
 }
 
-char *copyl()
+static char *copyl()
 {
    char *str = copyalloc(1);
 
-   if (yyleng == 4)
+   if (yyleng == 4) {
       str[0] = escape(yytext[2]);
-   else
+   } else {
       str[0] = yytext[1];
+   }
 
    return str;
 }
 
-int copyint()
+static int copyint()
 {
    return strtol(yytext, NULL, 10);
 }
 
-int copyhint()
+static int copyhint()
 {
    return strtol(yytext, NULL, 16);
 }
 
-float copyflt()
+static float copyflt()
 {
    return strtod(yytext, NULL);
 }
 
-float copyhflt()
+static float copyhflt()
 {
    return strtod(yytext, NULL);
 }
