@@ -1,0 +1,25 @@
+
+   
+   
+   <func>foo <int>  ()
+   {}
+   
+   <func>main <int>  ()
+   
+     
+     
+     <var>a <int> 
+     <var>b <float> 
+     
+     if 
+     a <int> 
+     {}
+     
+     if 
+     < 
+     b <float>  as int>
+     {}
+     
+     if 
+     foo <int> 
+     {}
