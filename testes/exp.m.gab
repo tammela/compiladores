@@ -1,1 +1,69 @@
-OK
+
+   
+   
+   <func>foo <void>  ()
+   {}
+   
+   <func>main <void>  ()
+   
+     
+     
+     
+     
+     <var>a <int> 
+     <var>b <int> 
+     <var>c <int> 
+     <var>d <int> 
+     
+     d <int> = 
+      - 
+      1
+     
+     c <int> = 
+       
+       
+      - 
+      1 * 
+      d <int>  + 
+      1
+     
+     b <int> = 
+       
+       
+      1 / 
+      c <int>  / 
+      d <int> 
+     
+     a <int> = 
+       
+       
+       
+       
+      a <int>  * 
+      b <int>  * 
+      c <int>  * 
+      d <int>  + 
+      1
+     
+     echo 
+     a <int> 
+     
+     echo 
+     b <int> 
+     
+     echo 
+      
+      
+     1 + 
+     2 + 
+     3
+     
+     
+       
+       <var>e <float> 
+       
+       e <float> = 
+        < 
+        1 as float>
+     
+     return

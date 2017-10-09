@@ -2,16 +2,26 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <limits.h>
 #include <stdio.h>
 #include "lex.yy.h"
+#include "tree.h"
 #include "monga.tab.h"
+#include "analyze.h"
 
-int yydebug = 1;
+int yydebug = 0;
+
+Def *AST_tree;
 
 int main(int argc, char **argv)
 {
    int fd;
+
+   AST_tree = malloc(sizeof(Def));
+
+   if (AST_tree == NULL) {
+      puts(strerror(ENOMEM));
+      exit(-1);
+   }
 
    if (argc < 2) {
       puts("No input");
@@ -26,10 +36,11 @@ int main(int argc, char **argv)
    yyrestart(fdopen(fd, "r"));
 
    if (yyparse()) {
-      fprintf(stdout, "NOT OK");
-   } else {
-      fprintf(stdout, "OK");
+      exit(-1);
    }
+
+   analyzeTree(AST_tree);
+   printTree(AST_tree);
 
    close(fd);
 

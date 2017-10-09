@@ -3,7 +3,10 @@
 foo () : void {}
 
 main() : void {
-   a, b, c, d : int;
+   a : int;
+   b : int;
+   c : int;
+   d : int;
 
    d = -1;
    c = -1*d+1;

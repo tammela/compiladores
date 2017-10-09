@@ -1,0 +1,28 @@
+
+   
+   
+   <func>main <int>  ()
+   
+     
+     
+     
+     <var>a <float> 
+     <var>b <int> 
+     <var>c <char> 
+     
+     b <int> = 
+      1
+     
+     c <char> = 
+      97
+     
+     a <float> = 
+       
+      < 
+      42 as float> + 
+      1.000000
+     
+     c <char> = 
+       
+      b <int>  + 
+      c <char> 
