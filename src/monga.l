@@ -1,26 +1,28 @@
 %{
 #include <string.h>
 #include "monga.tab.h"
+#include "util.h"
 
-static char *copyid();
-static char *copys();
-static char *copyl();
-static int copyint();
-static int copyhint();
-static float copyflt();
-static float copyhflt();
+static char *copyid(char *, size_t);
+static char *copys(char *, size_t);
+static int copyl(char *);
+static int copyint(char *);
+static int copyhint(char *);
+static float copyflt(char *);
+static float copyhflt(char *);
+
 %}
 
-comment         \#[^\n]*\n
+comment         \#[^\n]*
 
 id              [a-zA-Z_][a-zA-Z0-9_]*
 string          \"([^\\"\n]|\\.)*\"
-literal         \'(.|\\n|\\t|\\\\)\'
+literal         \'([^\']|\\n|\\t|\\\\|\\\')\'
 
 decint          [0-9]+
 hexint          0[xX][0-9a-fA-F]+
 
-expoent         ([EepP][-+]?[0-9]+)?
+expoent         ([pP][-+]?[0-9]+)?
 decflt          {decint}\.{decint}
 hexflt          {hexint}\.[0-9a-fA-F]+{expoent}
 
@@ -47,37 +49,39 @@ new                             { return TK_NEW; }
 as                              { return TK_AS; }
 
 {id}                            {
-                                    yylval.str = copyid();
+                                    yylval.wrap.str = copyid(yytext, yyleng);
+                                    yylval.wrap.len = yyleng + 1;
                                     return TK_ID;
                                 }
 
 {string}                        {
-                                    yylval.str = copys();
+                                    yylval.wrap.str = copys(yytext, yyleng);
+                                    yylval.wrap.len = yyleng - 1;
                                     return TK_STRING;
                                 }
 
 {literal}                       {
-                                    yylval.str = copyl();
-                                    return TK_LITERAL;
+                                    yylval.inum = copyl(yytext);
+                                    return TK_VINT;
                                 }
 {decflt}                        {
-                                    yylval.fnum = copyflt();
-                                    return TK_SFLOAT;
+                                    yylval.fnum = copyflt(yytext);
+                                    return TK_VFLOAT;
                                 }
 
 {hexflt}                        {
-                                    yylval.fnum = copyhflt();
-                                    return TK_SFLOAT;
+                                    yylval.fnum = copyhflt(yytext);
+                                    return TK_VFLOAT;
                                 }
 
 {decint}                        {
-                                    yylval.inum = copyint();
-                                    return TK_SINT;
+                                    yylval.inum = copyint(yytext);
+                                    return TK_VINT;
                                 }
 
 {hexint}                        {
-                                    yylval.inum = copyhint();
-                                    return TK_SINT;
+                                    yylval.inum = copyhint(yytext);
+                                    return TK_VINT;
                                 }
 
 {comment}                       /* noop */
@@ -100,23 +104,11 @@ as                              { return TK_AS; }
 
 %%
 
-static void *copyalloc(size_t arraysz)
+static char *copyid(char *ptr, size_t len)
 {
-   void *ptr = calloc(arraysz, sizeof(char));
+   char *str = allocstring(len + 1);
 
-   if (ptr == NULL) {
-      puts(strerror(ENOMEM));
-      exit(-1);
-   }
-
-   return ptr;
-}
-
-static char *copyid()
-{
-   char *str = copyalloc(yyleng + 1);
-
-   strncpy(str, yytext, yyleng + 1);
+   strncpy(str, ptr, len + 1);
 
    return str;
 }
@@ -136,27 +128,56 @@ static char escape(char c)
       case '"':
          return '"';
          break;
+      case '\'':
+         return '\'';
+         break;
       default:
-         return '\0';
+         perr("Invalid escape sequence");
          break;
    }
 }
 
-static char *copys()
+static char *llvmescape(char c)
+{
+   switch(c) {
+      case 'n':
+         return "0A";
+         break;
+      case 't':
+         return "09";
+         break;
+      case '\\':
+         return "5C";
+         break;
+      case '"':
+         return "22";
+         break;
+      case '\'':
+         return "27";
+         break;
+      default:
+         perr("Invalid escape sequence");
+         break;
+   }
+}
+
+
+static char *copys(char *ptr, size_t len)
 {
    int i = 0;
-   char *str = copyalloc(yyleng - 1);
-   char *p = yytext;
+   char *str = allocstring(len - 1);
+   char *p = ptr + 1;
 
-   while (*p) {
+   while (*p != '"') {
       switch (*p) {
          case '\\':
-            str[i] = escape(*(p + 1));
+            len += 2; /* LLVM escape is \0<hex> */
+            str = realloc(str, len);
+            str[i] = '\\';
+            str[i + 1] = '\0';
+            strcat(str, llvmescape(*(p + 1)));
+            i += 3;
             p += 2;
-            break;
-         case '"':
-            p++;
-            i--;
             break;
          default:
             str[i] = *p;
@@ -166,40 +187,40 @@ static char *copys()
       i++;
    }
 
-   str[i + 1] = '\0';
+   str[i] = '\0';
+   strcat(str, "\\00");
 
    return str;
 }
 
-static char *copyl()
+static int copyl(char *ptr)
 {
-   char *str = copyalloc(1);
+   int val;
 
-   if (yyleng == 4) {
-      str[0] = escape(yytext[2]);
+   if (ptr[1] == '\\') {
+      val = escape(ptr[2]);
    } else {
-      str[0] = yytext[1];
+      val = ptr[1];
    }
-
-   return str;
+   return val;
 }
 
-static int copyint()
+static int copyint(char *ptr)
 {
-   return strtol(yytext, NULL, 10);
+   return strtol(ptr, NULL, 10);
 }
 
-static int copyhint()
+static int copyhint(char *ptr)
 {
-   return strtol(yytext, NULL, 16);
+   return strtol(ptr, NULL, 16);
 }
 
-static float copyflt()
+static float copyflt(char *ptr)
 {
-   return strtod(yytext, NULL);
+   return strtod(ptr, NULL);
 }
 
-static float copyhflt()
+static float copyhflt(char *ptr)
 {
-   return strtod(yytext, NULL);
+   return strtod(ptr, NULL);
 }

@@ -4,12 +4,20 @@ OBJDIR:= out
 SRCDIR:= src
 PROG:= monga-cc
 LEXINPUT:= monga.l
-SRCS:= monga.tab.c main.c lex.yy.c
+SRCS:= analyze.c symbols.c tree.c monga.tab.c main.c lex.yy.c ptree.c \
+       util.c geracod.c
 
 OBJS:= ${SRCS:%.c=${OBJDIR}/%.o}
 
-CFLAGS= -g
-LDFLAGS= -lfl
+UNAME:= $(shell uname -s)
+
+CFLAGS= -g -Wall
+
+ifeq ($(UNAME), Darwin)
+LDFLAGS= -ll -llua -lm
+else
+LDFLAGS= -lfl -llua -lm
+endif
 
 ${OBJDIR}:
 	@mkdir $@
@@ -36,4 +44,3 @@ testes: build
 
 clean:
 	rm -rf ${OBJDIR}
-
