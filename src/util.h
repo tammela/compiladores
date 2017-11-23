@@ -23,7 +23,6 @@ extern int isChar(Type *);
 extern int isArray(Type *);
 extern Type *getrefType(RefVar *);
 extern Type *expType(Exp *);
-extern int arrayDepth(Type *)
-
+extern int arrayDepth(Type *);
 
 #endif

@@ -193,7 +193,7 @@ int arrayDepth(Type *t)
       case SEQ:
          return 1 + arrayDepth(t->seqtype.right);
       default:
-         perr("%s : unknown type tag!", FUNC_ID(lastfuncdef));
+         perr("%s : unknown type tag!", __FUNCTION__);
          return 0;
    }
 }

@@ -12,7 +12,6 @@ static int isfirst = 1;
 void analyzeTree(Def *);
 
 static void fillScope(Def *);
-static int arrayDepth(Type *);
 static int compareType(Type *, Type *);
 static void analyzeFunctionDef(Def *);
 static void analyzeStatement(Stat *);
@@ -149,6 +148,7 @@ static void analyzeStatement(Stat *s)
             s->statwhile.e = castexpNode(s->statwhile.e,
                   typeNode(ATOMIC, INT));
          }
+         analyzeBlockStatement(s->statwhile.block);
          break;
       case ST_RETURN:
          if (s->statreturn.e != NULL) {
