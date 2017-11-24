@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
+
 #include "tree.h"
 #include "util.h"
 
@@ -19,7 +21,7 @@ struct cache {
 static struct cache control;
 
 static int geraExpressoes(Exp *);
-static void geraCond(Exp *, int, int, int *, int);
+static void geraCond(Exp *, int, int, int *);
 static const char *bintag2Str(Type *, EXP_tag);
 static void percorreStatement(Stat *);
 
@@ -160,7 +162,7 @@ static void printLocals(Def *d)
          printLocals(d->seqdef.right);
          break;
       default:
-         break;
+         assert(0);
    }
 }
 
@@ -210,7 +212,7 @@ static int getrefIdx(RefVar *r)
       case REF_VAR:
          return r->refv.v->num;
       default:
-         return 0;
+         assert(0);
    }
 }
 
@@ -248,7 +250,7 @@ static void geraIf(Stat *s)
    int lout = geraLabel();
 
    printf("; if\n");
-   geraCond(s->statif.e, lt, lf, NULL, 0);
+   geraCond(s->statif.e, lt, lf, NULL);
    printf("L%d:\n", lt);
    percorreStatement(s->statif.ifblock);
    printf("br label %%L%d\n", lout);
@@ -266,7 +268,7 @@ static void geraWhile(Stat *s)
    int lcmp = 0;
 
    printf("; while\n");
-   geraCond(s->statwhile.e, lb, lout, &lcmp, 1);
+   geraCond(s->statwhile.e, lb, lout, &lcmp);
    printf("L%d:\n", lb);
    percorreStatement(s->statwhile.block);
    printf("br label %%L%d\n", lcmp);
@@ -302,7 +304,7 @@ static void percorreStatement(Stat *s)
          percorreStatement(s->statseq.right);
          break;
       default:
-         perr("%s : tag not implemented!", __FUNCTION__);
+         assert(0);
    }
 }
 
@@ -353,13 +355,14 @@ static int geraVar(RefVar *r)
          }
          return num;
       default:
-         return 0;
+        assert(0);
    }
 }
 
 static int geraExpressoes(Exp *e)
 {
    int nume1, nume2, num;
+   int lt, lf, lout;
    RefVar *r;
    Type *t;
 
@@ -432,8 +435,20 @@ static int geraExpressoes(Exp *e)
          }
          e->castexp.num = num;
          return num;
+      case EXP_AND:
+      case EXP_OR:
+         lt = geraLabel();
+         lf = geraLabel();
+         lout = geraLabel();
+         geraCond(e, lt, lf, NULL);
+         printf("L%d: br label %%L%d\n", lt, lout);
+         printf("L%d: br label %%L%d\n", lf, lout);
+         printf("L%d:\n", lout);
+         num = printCmd();
+         printf(" phi i32 [1, %%L%d], [0, %%L%d]\n", lt, lf);
+         return num;
       default:
-         return 0;
+         assert(0);
    }
 }
 
@@ -461,7 +476,7 @@ static void printParams(Def *p)
          }
          break;
       default:
-         break;
+         assert(0);
    }
 }
 
@@ -509,14 +524,15 @@ static const char *bintag2Str(Type *t, EXP_tag tag)
             return "ogt";
          return "sgt";
       default:
-         return "";
+         assert(0);
    }
 }
 
-static void geraCond(Exp *e, int lt, int lf, int *lcmp, int genlcmp)
+static void geraCond(Exp *e, int lt, int lf, int *lcmp)
 {
    int nume1;
    int nume2;
+   int l;
    Type *t;
 
    switch (e->tag) {
@@ -527,7 +543,7 @@ static void geraCond(Exp *e, int lt, int lf, int *lcmp, int genlcmp)
          printCmd();
          printf(" %s nsw %s %%cmd%d, %%cmd%d\n", bintag2Str(t, e->tag),
                strType(t), nume1, nume2);
-         if (genlcmp) {
+         if (lcmp) {
             *lcmp = geraLabel();
             printf("br label %%L%d\n", *lcmp);
             printf("L%d:\n", *lcmp);
@@ -539,7 +555,7 @@ static void geraCond(Exp *e, int lt, int lf, int *lcmp, int genlcmp)
          t = expType(e);
          nume1 = geraExpressoes(e->binexp.e1);
          nume2 = geraExpressoes(e->binexp.e2);
-         if (genlcmp) {
+         if (lcmp) {
             *lcmp = geraLabel();
             printf("br label %%L%d\n", *lcmp);
             printf("L%d:\n", *lcmp);
@@ -548,28 +564,20 @@ static void geraCond(Exp *e, int lt, int lf, int *lcmp, int genlcmp)
          printf(" icmp %s %s %%cmd%d, %%cmd%d\n", bintag2Str(t, e->tag),
                strType(t), nume1, nume2);
          goto out;
-      case EXP_INT:
-         nume1 = geraExpressoes(e);
-         if (genlcmp) {
-            *lcmp = geraLabel();
-            printf("br label %%L%d\n", *lcmp);
-            printf("L%d:\n", *lcmp);
-         }
-         printCmd();
-         printf(" icmp ne i32 %%cmd%d, 0\n", nume1);
-         goto out;
-      case EXP_CAST:
-         nume1 = geraExpressoes(e->castexp.e);
-         if (genlcmp) {
-            *lcmp = geraLabel();
-            printf("br label %%L%d\n", *lcmp);
-            printf("L%d:\n", *lcmp);
-         }
-         printCmd();
-         printf(" icmp ne i32 %%cmd%d, 0\n", nume1);
-         goto out;
+      case EXP_AND:
+         l = geraLabel();
+         geraCond(e->binexp.e1, l, lf, lcmp);
+         printf("L%d:\n", l);
+         geraCond(e->binexp.e2, lt, lf, lcmp);
+         return;
+      case EXP_OR:
+         l = geraLabel();
+         geraCond(e->binexp.e1, lt, l, lcmp);
+         printf("L%d:\n", l);
+         geraCond(e->binexp.e2, lt, lf, lcmp);
+         return;
       case EXP_VAR:
-         if (genlcmp) {
+         if (lcmp) {
             *lcmp = geraLabel();
             printf("br label %%L%d\n", *lcmp);
             printf("L%d:\n", *lcmp);
@@ -577,8 +585,17 @@ static void geraCond(Exp *e, int lt, int lf, int *lcmp, int genlcmp)
          nume1 = geraExpressoes(e);
          printCmd();
          printf(" icmp ne i32 %%cmd%d, 0\n", nume1);
+         goto out;
       default:
-         break;
+         nume1 = geraExpressoes(e);
+         if (lcmp) {
+            *lcmp = geraLabel();
+            printf("br label %%L%d\n", *lcmp);
+            printf("L%d:\n", *lcmp);
+         }
+         printCmd();
+         printf(" icmp ne i32 %%cmd%d, 0\n", nume1);
+         goto out;
    }
 
 out:

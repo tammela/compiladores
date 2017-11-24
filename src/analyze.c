@@ -129,6 +129,9 @@ static void analyzeStatement(Stat *s)
       case ST_IF:
          analyzeExp(s->statif.e);
          et = expType(s->statif.e);
+         if (s->statif.e->tag == EXP_STR) {
+            perr("%s : literal string as a condition!", FUNC_ID(lastfuncdef))
+         }
          if (isVoid(et)) {
             perr("%s : statement is expecting a non-void type!", FUNC_ID(lastfuncdef));
          }
@@ -141,6 +144,9 @@ static void analyzeStatement(Stat *s)
       case ST_WHILE:
          analyzeExp(s->statwhile.e);
          et = expType(s->statwhile.e);
+         if (s->statwhile.e->tag == EXP_STR) {
+            perr("%s : literal string as a condition!", FUNC_ID(lastfuncdef))
+         }
          if (isVoid(et)) {
             perr("%s : statement is expectating a non-void type!", FUNC_ID(lastfuncdef));
          }
