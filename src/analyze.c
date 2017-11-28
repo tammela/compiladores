@@ -120,9 +120,8 @@ static void analyzeStatement(Stat *s)
                s->statattr.e = castexpNode(s->statattr.e, typeNode(ATOMIC, FLOAT));
             } else if (isInt(vt) && isFlt(et)) {
                s->statattr.e = castexpNode(s->statattr.e, typeNode(ATOMIC, INT));
-            }
-            else if ((!isChar(vt) && isInt(et)) || (!isInt(vt)  && isChar(et))) {
-               s->statattr.e = castexpNode(s->statattr.e, vt);
+            } else if (isInt(vt) && !isInt(et)) {
+               s->statattr.e = castexpNode(s->statattr.e, typeNode(ATOMIC, INT));
             }
          }
          break;

@@ -40,6 +40,7 @@ union refvar {
    } refv;
    struct {
       RV_tag tag;
+      int num;
       Exp *v;
       Exp *idx;
    } refa;
@@ -206,6 +207,7 @@ union exp {
    } fltexp;
    struct {
       EXP_tag tag;
+      int num;
       RefVar *r;
    } varexp;
    struct {

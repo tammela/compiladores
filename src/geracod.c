@@ -20,6 +20,8 @@ struct cache {
 
 static struct cache control;
 
+static int geraVar(RefVar *);
+static int getrefIdx(RefVar *);
 static int geraExpressoes(Exp *);
 static void geraCond(Exp *, int, int, int *);
 static const char *bintag2Str(Type *, EXP_tag);
@@ -54,6 +56,19 @@ static char *strType(Type *t)
 
    return NULL;
 }
+
+static char *stratomType(Type *t)
+{
+   if (isInt(t) || isChar(t))
+      return "i32";
+   else if (isFlt(t))
+      return "double";
+   else if (isVoid(t))
+      return "void";
+
+   return NULL;
+}
+
 
 static int getExpLen(Exp *e)
 {
@@ -211,9 +226,11 @@ static int getrefIdx(RefVar *r)
    switch (r->tag) {
       case REF_VAR:
          return r->refv.v->num;
-      default:
-         assert(0);
+      case REF_ARRAY:
+         return r->refa.num;
    }
+
+   return 0;
 }
 
 static void geraAtribuicao(Stat *s)
@@ -225,9 +242,14 @@ static void geraAtribuicao(Stat *s)
    v = s->statattr.v;
    type = expType(s->statattr.e);
    expnum = geraExpressoes(s->statattr.e);
+
+   if (v->tag == REF_ARRAY) {
+      geraVar(v);
+   }
+
    numref = getrefIdx(v);
 
-   if (isArray(type)) {
+   if (isArray(type) && s->statattr.e->tag != EXP_NEW) {
       printf("store ");
       if (isChar(type)) {
          printConst("i8", expnum, getExpLen(s->statattr.e), 1);
@@ -236,10 +258,14 @@ static void geraAtribuicao(Stat *s)
       printf("store %s %%cmd%d", strType(type), expnum);
    }
 
-   if (!v->refv.v->globalnum) {
-      printf(", %s* %%cmd%d\n", strType(type), numref);
+   if (v->tag != REF_ARRAY) {
+      if (!v->refv.v->globalnum) {
+         printf(", %s* %%cmd%d\n", strType(type), numref);
+      } else {
+         printf(", %s* @cmd%d\n", strType(type), v->refv.v->globalnum);
+      }
    } else {
-      printf(" %s* @cmd%d\n", strType(type), v->refv.v->globalnum);
+      printf(", %s* %%cmd%d\n", strType(type), numref);
    }
 }
 
@@ -339,24 +365,63 @@ static void geraGlobais(Def *d)
    }
 }
 
+static int geraIndexacao(Exp *idx, int num, char *type)
+{
+   Exp *p = idx;
+   int numgen, numret;
+   char *dup;
+
+   if (p->tag != EXP_SEQ) {
+      numgen = geraExpressoes(p);
+      numret = printCmd();
+      dup = strdup(type);
+      dup[strlen(dup) - 1] = '\0';
+      printf(" getelementptr inbounds %s, %s %%cmd%d, i32 %%cmd%d\n", dup,
+            type, num, numgen);
+      return numret;
+   }
+
+   while (p != NULL) {
+      numgen = geraExpressoes(p->seqexp.left);
+      numret = printCmd();
+      dup = strdup(type);
+      dup[strlen(dup) - 1] = '\0';
+      printf(" getelementptr inbounds %s, %s %%cmd%d, i32 %%cmd%d\n", dup,
+            type, num, numgen);
+      type[strlen(type)] = '\0';
+      p = p->seqexp.right;
+   }
+
+   return numret;
+}
+
 static int geraVar(RefVar *r)
 {
    Var *v;
    int num;
+   int numvar, numidx;
+   char *type;
 
    switch (r->tag) {
       case REF_VAR:
          v = r->refv.v;
+         type = strType(v->type);
          num = printCmd();
          if (!v->globalnum) {
-            printf(" load %s, %s* %%cmd%d\n", strType(v->type), strType(v->type), v->num);
+            printf(" load %s, %s* %%cmd%d\n", type, type, v->num);
          } else {
-            printf(" load %s, %s* @cmd%d\n", strType(v->type), strType(v->type), v->globalnum);
+            printf(" load %s, %s* @cmd%d\n", type, type, v->globalnum);
          }
          return num;
-      default:
-        assert(0);
+      case REF_ARRAY:
+         numvar = geraExpressoes(r->refa.v);
+         type = strType(expType(r->refa.v));
+         numidx = geraIndexacao(r->refa.idx, numvar, type);
+         r->refa.num = numidx;
+         return numidx;
    }
+
+   return 0;
 }
 
 static int geraExpressoes(Exp *e)
@@ -395,6 +460,7 @@ static int geraExpressoes(Exp *e)
      case EXP_VAR:
          r = e->varexp.r;
          num = geraVar(r);
+         e->varexp.num = num;
          return num;
       case EXP_STR:
          if (e->strexp.num == 0) {
@@ -446,6 +512,13 @@ static int geraExpressoes(Exp *e)
          printf("L%d:\n", lout);
          num = printCmd();
          printf(" phi i32 [1, %%L%d], [0, %%L%d]\n", lt, lf);
+         return num;
+      case EXP_NEW:
+         nume1 = geraExpressoes(e->newexp.size);
+         nume2 = printCmd();
+         printf(" call noalias i8* @malloc(i32 %%cmd%d)\n", nume1);
+         num = printCmd();
+         printf(" bitcast i8* %%cmd%d to %s*\n", nume2, stratomType(expType(e)));
          return num;
       default:
          assert(0);
@@ -643,7 +716,7 @@ void geraCodigo(Def *root)
    control.conststr = printGlobalCmd();
    printf(" private constant [4 x i8] c\"%%s\\0A\\00\"\n");
    printf("declare i32 @printf(i8*, ...)\n");
-   printf("declare i8* @malloc(i64)\n");
+   printf("declare i8* @malloc(i32)\n");
    /* generates code for each function in the AST tree */
    geraFuncoes(root);
    /* dump constant strings found on the tree */
