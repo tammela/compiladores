@@ -41,6 +41,7 @@ union refvar {
    struct {
       RV_tag tag;
       int num;
+      Type *t;
       Exp *v;
       Exp *idx;
    } refa;

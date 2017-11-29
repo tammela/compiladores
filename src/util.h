@@ -14,6 +14,7 @@ extern int push2Table(void *, int);
 extern void dumpTable(int);
 extern void destroyState(void);
 
+extern void *myrealloc(void *, size_t);
 extern void *allocstring(size_t);
 
 extern int isVoid(Type *);

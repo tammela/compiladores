@@ -108,11 +108,22 @@ Type *getrefType(RefVar *r)
       case REF_VAR:
          return r->refv.v->type;
       case REF_ARRAY:
-         return expType(r->refa.v);
+         return r->refa.t;
       default:
          perr("%s : unknown refvar tag!", __FUNCTION__);
          return 0;
    }
+}
+
+void *myrealloc(void *ptr, size_t sz)
+{
+   void *p = realloc(ptr, sz);
+
+   if (p == NULL) {
+      perr("no memory");
+   }
+
+   return p;
 }
 
 void *allocstring(size_t sz)

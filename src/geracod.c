@@ -18,6 +18,12 @@ struct cache {
    int conststr;  /* %s */
 };
 
+/* wrapper for expressions */
+struct wrap {
+   int num;
+   Type *t;
+};
+
 static struct cache control;
 
 static int geraVar(RefVar *);
@@ -56,19 +62,6 @@ static char *strType(Type *t)
 
    return NULL;
 }
-
-static char *stratomType(Type *t)
-{
-   if (isInt(t) || isChar(t))
-      return "i32";
-   else if (isFlt(t))
-      return "double";
-   else if (isVoid(t))
-      return "void";
-
-   return NULL;
-}
-
 
 static int getExpLen(Exp *e)
 {
@@ -115,11 +108,6 @@ static int geraLabel(void)
    return labelcounter;
 }
 
-static void printRet(Var *v)
-{
-   printf("ret %s\n", strType(v->type));
-}
-
 static void printConst(const char *type, int idx, int len, int isglobal)
 {
    if (!isglobal) {
@@ -155,7 +143,7 @@ static void printLocals(Def *d)
          statnum = printCmd();
          printf(" alloca %s\n", strType(v->type));
          if (v->num != 0) { /* this is a parameter */
-            printf("store %%cmd%d, %s* %%cmd%d\n", v->num, strType(v->type), statnum);
+            printf("store %s %%cmd%d, %s* %%cmd%d\n", strType(v->type), v->num, strType(v->type), statnum);
          } else {
             if (isArray(v->type)) {
                printf("store %s null, %s* %%cmd%d\n", strType(v->type),
@@ -181,7 +169,7 @@ static void printLocals(Def *d)
    }
 }
 
-static int geraEcho(Stat *leaf)
+static void geraEcho(Stat *leaf)
 {
    int num, expnum;
    Type *t;
@@ -192,19 +180,24 @@ static int geraEcho(Stat *leaf)
    expnum = geraExpressoes(e);
    num = printCmd();
    printf(" call i32 (i8 *, ...) @printf(");
-   if (isChar(t) && isArray(t)) { /* literal string */
-      /* print %s constant */
-      printConst("i8", control.conststr, 4, 1);
-      printf(",");
-      goto out;
-   } else if (!isArray(t)) {
+   if (isArray(t)) {
+      if (isChar(t)) { /* literal string */
+         /* print %s constant */
+         printConst("i8", control.conststr, 4, 1);
+         printf(",");
+         goto out;
+      } else {
+         printConst("i8", control.constint, 4, 1);
+         printf(",");
+      }
+   } else {
       if (isInt(t) || isChar(t)) {
          /* print %d constant */
          printConst("i8", control.constint, 4, 1);
          printf(",");
          goto out;
       } else if (isFlt(t)) {
-         /* print %f constant */
+         /* print %.7f constant */
          printConst("i8", control.constflt, 6, 1);
          printf(",");
          goto out;
@@ -218,7 +211,6 @@ out:
    else
        printConst(strType(t), expnum, getExpLen(e), 0);
    printf(")\n");
-   return num;
 }
 
 static int getrefIdx(RefVar *r)
@@ -302,6 +294,62 @@ static void geraWhile(Stat *s)
    printf("; endwhile\n");
 }
 
+static void geraReturn(Stat *s)
+{
+   int num;
+   Type *t;
+
+   t = expType(s->statreturn.e);
+   num = geraExpressoes(s->statreturn.e);
+   printf("ret %s %%cmd%d\n", strType(t), num);
+}
+
+static struct wrap *percorreExpressoes(Exp *e, int *len)
+{
+   struct wrap *ret = myrealloc(NULL, sizeof(struct wrap) * 8);
+   int i = 8;
+   int k = 0;
+
+   switch (e->tag) {
+      case EXP_SEQ:
+         while (e != NULL) {
+            ret[k].num = geraExpressoes(e->seqexp.left);
+            ret[k].t = expType(e->seqexp.left);
+            k++;
+            if (k == i) {
+               i *= 2;
+               ret = myrealloc(ret, sizeof(struct wrap) * i);
+            }
+            e = e->seqexp.right;
+         }
+         *len = k;
+         return ret;
+      default:
+         assert(0);
+   }
+}
+
+static int geraCall(Call *c)
+{
+   int len = 0;
+   int num = 0, i;
+   struct wrap *params;
+
+   params = percorreExpressoes(c->e, &len);
+   if (!isVoid(c->v->type)) {
+      num = printCmd();
+   }
+   printf(" call %s @%s(", strType(c->v->type), c->v->id);
+   for (i = 0; i < len; i++) {
+      printf("%s %%cmd%d", strType(params[i].t), params[i].num);
+      if ((i + 1) < len) {
+         printf(",");
+      }
+   }
+   printf(")\n");
+   return num;
+}
+
 static void percorreStatement(Stat *s)
 {
 
@@ -324,6 +372,12 @@ static void percorreStatement(Stat *s)
          break;
       case ST_ECHO:
          geraEcho(s);
+         break;
+      case ST_RETURN:
+         geraReturn(s);
+         break;
+      case ST_CALL:
+         geraCall(s->statcall.c);
          break;
       case ST_SEQ:
          percorreStatement(s->statseq.left);
@@ -400,6 +454,7 @@ static int geraVar(RefVar *r)
    Var *v;
    int num;
    int numvar, numidx;
+   Type *t;
    char *type;
 
    switch (r->tag) {
@@ -414,8 +469,9 @@ static int geraVar(RefVar *r)
          }
          return num;
       case REF_ARRAY:
+         t = expType(r->refa.v);
          numvar = geraExpressoes(r->refa.v);
-         type = strType(expType(r->refa.v));
+         type = strType(t);
          numidx = geraIndexacao(r->refa.idx, numvar, type);
          r->refa.num = numidx;
          return numidx;
@@ -458,10 +514,19 @@ static int geraExpressoes(Exp *e)
          e->binexp.num = num;
          return num;
      case EXP_VAR:
-         r = e->varexp.r;
-         num = geraVar(r);
-         e->varexp.num = num;
-         return num;
+         if (e->varexp.num == 0) {
+            r = e->varexp.r;
+            if (r->tag != REF_ARRAY) {
+               num = geraVar(r);
+            } else {
+               nume1 = geraVar(r);
+               t = expType(e);
+               num = printCmd();
+               printf(" load %s, %s* %%cmd%d\n", strType(t), strType(t), nume1);
+            }
+            e->varexp.num = num;
+         }
+         return e->varexp.num;
       case EXP_STR:
          if (e->strexp.num == 0) {
             e->strexp.num = incCounter();
@@ -518,7 +583,7 @@ static int geraExpressoes(Exp *e)
          nume2 = printCmd();
          printf(" call noalias i8* @malloc(i32 %%cmd%d)\n", nume1);
          num = printCmd();
-         printf(" bitcast i8* %%cmd%d to %s*\n", nume2, stratomType(expType(e)));
+         printf(" bitcast i8* %%cmd%d to %s\n", nume2, strType(expType(e)));
          return num;
       default:
          assert(0);
@@ -693,7 +758,9 @@ static void geraFuncoes(Def *f)
          printLocals(f->funcdef.p);
          printLocals(f->funcdef.b->statblock.b->v);
          percorreStatement(f->funcdef.b);
-         printRet(f->funcdef.v);
+         if (isVoid(f->funcdef.v->type)) {
+            printf("ret void\n");
+         }
          printf("}\n");
          break;
       case DEF_SEQ:

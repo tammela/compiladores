@@ -179,6 +179,7 @@ static void analyzeStatement(Stat *s)
             perr("%s : function %s is not declared!!", FUNC_ID(lastfuncdef),
                   s->statcall.c->v->id);
          }
+         s->statcall.c->v->type = ct;
          analyzeExp(s->statcall.c->e);
          break;
       case ST_BLOCK:
@@ -214,6 +215,20 @@ static void validateArray(Exp *e)
    }
 }
 
+static Type *indexedType(Exp *v)
+{
+   Type *vtype;
+
+   vtype = expType(v);
+
+   if (vtype->tag != SEQ) {
+      perr("%s : forbidden index access, expression is not an array",
+            FUNC_ID(lastfuncdef));
+   }
+
+   return vtype->seqtype.right;
+}
+
 static void analyzeVariable(RefVar *r)
 {
    Var *v;
@@ -238,6 +253,7 @@ static void analyzeVariable(RefVar *r)
          if (!compareType(idxtype, typeNode(ATOMIC, INT))) {
             r->refa.idx = castexpNode(r->refa.idx, typeNode(ATOMIC, INT));
          }
+         r->refa.t = indexedType(r->refa.v);
          break;
    }
 }
